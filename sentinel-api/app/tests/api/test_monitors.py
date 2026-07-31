@@ -99,7 +99,8 @@ async def test_delete_monitor_success(
         headers=headers,
     )
 
-    assert delete_response.status_code == 204
+    assert delete_response.status_code == 200
+    assert delete_response.json()["message"] == "Monitor deleted successfully"
 
 
 @pytest.mark.asyncio

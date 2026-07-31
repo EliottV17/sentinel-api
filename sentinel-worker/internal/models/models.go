@@ -1,3 +1,5 @@
+package models
+
 import (
 	"encoding/json"
 	"time"
