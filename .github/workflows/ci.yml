@@ -30,6 +30,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/sentinel_tests_db
+      SECRET_KEY: "super-secret-key-para-tests-ci"
 
     steps:
       - uses: actions/checkout@v4
