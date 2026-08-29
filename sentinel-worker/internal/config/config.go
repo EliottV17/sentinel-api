@@ -1,9 +1,10 @@
+// Package config loads worker configuration from the environment.
 package config
 
 import "os"
 
 type Config struct {
-	DatabaseUrl string
+	DatabaseURL string
 	Concurrency int
 }
 
@@ -14,7 +15,7 @@ func Load() Config {
 		url = "postgres://postgres:postgres@127.0.0.1:5432/sentinel_db"
 	}
 	return Config{
-		DatabaseUrl: url,
+		DatabaseURL: url,
 		Concurrency: concurrency,
 	}
 }

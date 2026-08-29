@@ -4,26 +4,35 @@
 
 ```
 sentinel/                    # Git root
-├── sentinel-api/            # Python/FastAPI — primary, fully functional
-└── sentinel-worker/         # Go — skeleton, not functional yet
+├── sentinel-api/            # Python/FastAPI — full app, primary
+└── sentinel-worker/         # Go — independent poller writing to the same DB
 ```
 
-No root-level tooling. All commands run inside `sentinel-api/`.
+No root-level tooling. All Python commands run inside `sentinel-api/`.
 
-## Commands (run from `sentinel-api/`)
+## Commands
+
+From `sentinel-api/`:
 
 ```bash
 uv sync --group dev          # install deps
-docker compose up -d         # start PostgreSQL 17 (creates sentinel_db)
+docker compose up -d         # start PostgreSQL 17 (compose file is at repo root, not here)
 alembic upgrade head         # run migrations (requires .env with DATABASE_URL)
 uv run uvicorn app.main:app --reload   # dev server (APScheduler starts in-process)
 
 uv run ruff check .          # lint
 uv run ruff format .         # format
-pyright                      # type-check (must be installed globally; not via uv)
+uv run pyright               # type-check (installed via dev group)
 
 uv run pytest                # all tests
 uv run pytest app/tests/api/test_monitors.py::test_create_monitor  # single test
+```
+
+From `sentinel-worker/`:
+
+```bash
+go build ./cmd/worker/       # build
+DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/sentinel_db go run ./cmd/worker/
 ```
 
 ## Environment
@@ -37,25 +46,26 @@ ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
-Alembic's `env.py` imports `app.core.config.Settings` which reads `.env` from CWD — so both `alembic` and `uv run` must be run from `sentinel-api/`.
+Alembic's `migrations/env.py` imports `app.core.config.Settings`, which reads `.env` relative to CWD — so `alembic` and `uv run` must run from `sentinel-api/`.
 
 ## Test prerequisites
 
-Tests require a real PostgreSQL database `sentinel_tests_db` on localhost:5432. The test DB URL is **hardcoded** in `conftest.py:13`:
+- `docker compose up` only creates `sentinel_db`. Tests need a separate `sentinel_tests_db` database — create it manually.
+- The test DB URL is **hardcoded** in `conftest.py:13` (`postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/sentinel_tests_db`).
+- Tables are created/dropped per test function via `SQLModel.metadata.create_all`/`drop_all`. No migrations run for tests.
+- `pytest` config: `asyncio_mode = "auto"`, `testpaths = ["app/tests"]`.
 
-```
-postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/sentinel_tests_db
-```
+## Architecture
 
-Tables are created/dropped per function via `SQLModel.metadata.create_all`/`drop_all`. No migrations are run for tests.
-
-## Architecture notes
-
-- **Checker registry**: New check types implement `BaseChecker` and self-register with `@register`. The scheduler discovers them via `get_checker(check_type)` — no changes needed in API or scheduler code.
-- **State machine**: Alerts fire **only on transitions** (healthy→unhealthy = "down", unhealthy→healthy = "recovery"). Every individual check produces a `CheckResult`; `alert` rows are emitted only on state changes.
-- **Scheduler**: APScheduler `AsyncIOScheduler` runs `check_all_monitors` every 10 seconds inside the FastAPI lifespan. No separate worker process needed.
+- **Checker registry**: New check types implement `BaseChecker` and self-register with `@register`; the scheduler discovers them via `get_checker(check_type)`. No API/scheduler changes needed. New checker modules must be imported somewhere (e.g. `main.py` imports `app.core.checkers.http_checker`) or they never register.
+- **State machine**: Alerts fire **only on transitions** (healthy→unhealthy = "down", unhealthy→healthy = "recovery"). Every check writes a `check_result` row; `alert` rows only on state changes.
+- **Two independent engines, one schema**: the API's APScheduler checks all `state = "Active"` monitors every 10 s in-process; the Go worker polls every 2 s for monitors that are *due* by `frequency` (seconds). Both write `check_result` + `alert` and update `monitor.last_state`. Running both simultaneously double-checks every monitor — there's no locking/claiming.
 - **All DB access is async** (asyncpg, async SQLAlchemy sessions, async Alembic).
 
 ## sentinel-worker (Go)
 
-Stub only — most function bodies are empty. Builds with `go build ./cmd/worker/` but does nothing meaningful. Shares the same PostgreSQL schema; designed to poll `monitor` and write `check_result` + `alert` independently.
+Functional (not a stub). `cmd/worker/main.go` loads config, connects via pgx pool, registers the http checker, and runs the loop in `internal/worker/loop.go`: every 2 s it fetches Active monitors whose `last_checked_at + frequency` has passed, runs the checker, inserts `check_result`, updates `monitor`, and inserts `alert` on transition. Mirrors the Python scheduler's logic.
+
+Gotchas:
+- Two ~15 MB binaries (`sentinel-worker/sentinel-worker` and `sentinel-worker/worker`) are **committed to git** — `go build` artifacts. Don't delete them unless intentional.
+- `Dockerfile` is a multi-stage build (`golang:1.25-alpine` → `alpine:3.20`) with `CGO_ENABLED=0`.

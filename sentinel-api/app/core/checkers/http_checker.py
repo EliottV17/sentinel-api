@@ -22,9 +22,7 @@ class HttpChecker(BaseChecker):
                         method, monitor.target, timeout=timeout
                     )
             else:
-                resp = await _client.request(
-                    method, monitor.target, timeout=timeout
-                )
+                resp = await _client.request(method, monitor.target, timeout=timeout)
             return CheckResult(
                 state=CheckerState.HEALTHY
                 if resp.status_code == expected_status

@@ -1,3 +1,5 @@
+// Package checker defines the pluggable check interface and its concrete
+// implementations (http, ...). Checkers are registered by type name.
 package checker
 
 import (

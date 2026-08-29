@@ -1,3 +1,4 @@
+// Package main is the entrypoint for the Sentinel worker.
 package main
 
 import (
@@ -21,7 +22,7 @@ func main() {
 
 	cfg := config.Load()
 
-	pool, err := db.Connect(ctx, cfg.DatabaseUrl)
+	pool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Database connection failed: %v", err)
 	}

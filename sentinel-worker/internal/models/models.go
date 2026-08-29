@@ -1,3 +1,4 @@
+// Package models mirrors the database tables read by the worker.
 package models
 
 import (

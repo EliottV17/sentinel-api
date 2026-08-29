@@ -15,9 +15,7 @@ class MonitorService:
     ) -> Monitor:
 
         if monitor_create.check_type not in _checker_registry:
-            raise ValueError(
-                f"Unknown checker type: {monitor_create.check_type}"
-            )
+            raise ValueError(f"Unknown checker type: {monitor_create.check_type}")
 
         monitor_data = monitor_create.model_dump()
         monitor_model = Monitor(**monitor_data, user_id=user_id)

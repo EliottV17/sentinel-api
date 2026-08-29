@@ -28,5 +28,4 @@ class BaseChecker(ABC):
     @abstractmethod
     async def check(
         self, monitor: "Monitor", client: httpx.AsyncClient | None = None
-    ) -> CheckResult:
-        ...
+    ) -> CheckResult: ...

@@ -2,13 +2,21 @@
 
 Asynchronous monitoring and alerting engine built with **FastAPI** and **PostgreSQL**. Periodically checks external targets, detects state transitions, and records a full audit trail — designed for extensibility via a pluggable checker architecture.
 
+This repository is a monorepo:
+
+```
+sentinel/
+├── sentinel-api/      # This package — Python/FastAPI (API + in-process scheduler)
+└── sentinel-worker/   # Go — independent poller writing to the same DB
+```
+
 ## Tech Stack
 
 - **FastAPI** — fully async REST API with lifespan-managed background scheduler
 - **SQLModel + Alembic** — ORM and async migrations
 - **PostgreSQL 17** — persistent storage with JSONB for per-checker configuration
 - **APScheduler** — interval-based job execution within the FastAPI process
-- **Docker Compose** — local infrastructure (Postgres only)
+- **Docker Compose** — local infrastructure (Postgres, API, worker)
 - **uv** — package management
 - **Ruff** — linting and formatting
 
@@ -49,11 +57,11 @@ user    ──1:N──► monitor
 | `check_result` | Immutable log of every check (state, latency, status code, error) |
 | `alert` | State transition events (`down` / `recovery`) |
 
-### Future: external worker in Go
+### Go worker
 
-The schema is designed so an external worker can poll `monitor`, execute checks, and write `check_result` + `alert` rows — sharing the same database, no message queue required.
+The companion `sentinel-worker` is an independent Go poller that shares the same database schema and mirrors the Python scheduler's logic: every 2 s it fetches Active monitors whose `last_checked_at + frequency` has passed, runs the checker, and writes `check_result` + `alert` rows. No message queue required. Running both engines simultaneously double-checks every monitor — there is no locking/claiming.
 
-## Setup
+## Setup (local development)
 
 ### 1. Clone and install dependencies
 
@@ -76,9 +84,12 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 
 ### 3. Start infrastructure and run migrations
 
+The `docker-compose.yml` lives at the **repo root** (it also builds the API and worker images). Run it from there:
+
 ```bash
-docker compose up -d
-alembic upgrade head
+cd ..
+docker compose up -d db     # just Postgres 17 on localhost:5432
+alembic upgrade head         # from sentinel-api/
 ```
 
 ### 4. Run the server
@@ -88,6 +99,18 @@ uv run uvicorn app.main:app --reload
 ```
 
 The scheduler (APScheduler) starts automatically inside the FastAPI lifespan — no separate worker process needed.
+
+## Docker (full stack)
+
+From the repo root, build and start the whole stack (Postgres + API + worker):
+
+```bash
+docker compose up -d --build
+```
+
+- API exposed on `http://localhost:8000`, runs `alembic upgrade head` automatically on startup.
+- Worker runs the Go poller against the same database.
+- Postgres only listens on localhost. `SECRET_KEY` is read from the host env (defaults to `change-me`).
 
 ## Commands
 

@@ -1,3 +1,5 @@
+// Package worker implements the polling loop that checks due monitors and
+// persists the results alongside the API scheduler.
 package worker
 
 import (
