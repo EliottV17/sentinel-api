@@ -28,6 +28,9 @@ jobs:
       run:
         working-directory: sentinel-api
 
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/sentinel_tests_db
+
     steps:
       - uses: actions/checkout@v4
 
