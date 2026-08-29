@@ -67,5 +67,4 @@ Alembic's `migrations/env.py` imports `app.core.config.Settings`, which reads `.
 Functional (not a stub). `cmd/worker/main.go` loads config, connects via pgx pool, registers the http checker, and runs the loop in `internal/worker/loop.go`: every 2 s it fetches Active monitors whose `last_checked_at + frequency` has passed, runs the checker, inserts `check_result`, updates `monitor`, and inserts `alert` on transition. Mirrors the Python scheduler's logic.
 
 Gotchas:
-- Two ~15 MB binaries (`sentinel-worker/sentinel-worker` and `sentinel-worker/worker`) are **committed to git** — `go build` artifacts. Don't delete them unless intentional.
 - `Dockerfile` is a multi-stage build (`golang:1.25-alpine` → `alpine:3.20`) with `CGO_ENABLED=0`.
